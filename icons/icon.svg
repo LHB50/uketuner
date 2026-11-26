@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<rect width="512" height="512" fill="#5e2418"/>
+<g transform="translate(256 318)">
+<path d="M-170 0 A170 170 0 0 1 170 0 L110 0 A110 110 0 0 0 -110 0 Z" fill="#2a211c"/>
+<path d="M-150 0 A150 150 0 0 1 -106 -106 L-78 -78 A110 110 0 0 0 -110 0Z" fill="#ef5a1f"/>
+<path d="M-106 -106 A150 150 0 0 1 -39 -145 L-28 -106 A110 110 0 0 0 -78 -78Z" fill="#f6e21e"/>
+<path d="M-39 -145 A150 150 0 0 1 39 -145 L28 -106 A110 110 0 0 0 -28 -106Z" fill="#1fae36"/>
+<path d="M39 -145 A150 150 0 0 1 106 -106 L78 -78 A110 110 0 0 0 28 -106Z" fill="#f6e21e"/>
+<path d="M106 -106 A150 150 0 0 1 150 0 L110 0 A110 110 0 0 0 78 -78Z" fill="#ef5a1f"/>
+<path d="M-12 0 L0 -150 L12 0Z" fill="#f6eee6"/>
+<circle r="22" fill="#f6eee6"/><circle r="10" fill="#5e2418"/>
+</g>
+<text x="256" y="420" font-family="Arial Narrow, Arial, sans-serif" font-weight="700" font-size="56" fill="#f6eee6" text-anchor="middle" letter-spacing="10">GCEA</text>
+</svg>
