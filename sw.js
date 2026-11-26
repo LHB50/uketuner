@@ -1,5 +1,5 @@
 // Offline support: keep the app shell cached; cache Google Fonts as they load.
-const CACHE = "uke-tuner-v4";
+const CACHE = "uke-tuner-v5";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", e => {

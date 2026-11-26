@@ -97,7 +97,6 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
   font: 600 1.05rem var(--display); letter-spacing: .03em;
   padding: 12px 22px; background: var(--ink); color: var(--header);
 }
-.btn.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink-dim); }
 .status { text-align: center; font-size: .92rem; color: var(--ink-dim); margin: 0; min-height: 1.2em; }
 .status.warn { color: var(--near); }
 @media (prefers-reduced-motion: reduce) { .level i, .string { transition: none; } }
@@ -129,7 +128,6 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
 
     <div class="controls">
       <button class="btn" id="start" type="button">Start tuner</button>
-      <button class="btn ghost" id="demo" type="button">Demo</button>
     </div>
     <p class="status" id="status">Tap Start tuner and allow the microphone.</p>
   </main>
@@ -251,7 +249,7 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
   }
 
   // ---- Audio ----
-  let ctx = null, analyser = null, buf = null, source = null, stream = null, demoNodes = null, running = false;
+  let ctx = null, analyser = null, buf = null, source = null, stream = null, running = false;
   const history = [];
   let lastHeard = 0;
   let session = 0;      // bumps on every start/stop so stale loops, prompts and locks can tell they're out of date
@@ -289,11 +287,11 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
       const name = e && e.name;
       setStatus(name === "NotFoundError" || name === "OverconstrainedError" ? "No microphone was found on this device." :
                 name === "NotReadableError" ? "Another app is using the microphone. Close it and tap Start tuner again." :
-                "The microphone was blocked. Allow mic access for this page, or tap Demo to see how it works.", true);
+                "The microphone was blocked. Allow mic access for this page in your browser's site settings, then tap Start tuner.", true);
       return;
     }
     $("start").disabled = false;
-    if (mine !== session) { s.getTracks().forEach(t => t.stop()); return; } // user tapped Demo or left meanwhile
+    if (mine !== session) { s.getTracks().forEach(t => t.stop()); return; } // user left the page meanwhile
     stream = s;
     stream.getAudioTracks().forEach(t => t.addEventListener("ended", () => {
       if (stream === s) { stopAll(); setStatus("The microphone was disconnected. Tap Start tuner to listen again.", true); }
@@ -306,22 +304,6 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
     $("start").textContent = "Stop";
     setStatus("Listening. Pluck one string at a time.");
     loop(mine);
-  }
-
-  function startDemo() {
-    stopAll();
-    ensureCtx();
-    makeAnalyser();
-    // A plucked-ish tone that starts out of tune and glides into tune, cycling through the strings.
-    const osc = ctx.createOscillator(); osc.type = "triangle";
-    const g = ctx.createGain(); g.gain.value = 0.4;
-    osc.connect(g); g.connect(analyser);
-    osc.start();
-    demoNodes = { osc, g, t0: ctx.currentTime };
-    running = true;
-    $("demo").textContent = "Stop demo";
-    setStatus("Demo: a simulated string tunes up, one note at a time.");
-    loop(session);
   }
 
   // Keep the screen on while listening, where the browser allows it.
@@ -340,32 +322,15 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
     if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
     if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
     if (source) { source.disconnect(); source = null; }
-    if (demoNodes) { try { demoNodes.osc.stop(); } catch (_) {} demoNodes = null; }
     $("start").textContent = "Start tuner";
-    $("demo").textContent = "Demo";
     history.length = 0;
     showIdle();
     $("level").style.width = "3%";
     setStatus("Tap Start tuner and allow the microphone.");
   }
 
-  function updateDemoPitch() {
-    const d = demoNodes; if (!d) return;
-    const t = ctx.currentTime - d.t0;
-    const period = 4.5;
-    const idx = Math.floor(t / period) % STRINGS.length;
-    const phase = (t % period) / period;
-    const startCents = [-35, 28, -18, 22][idx];
-    // ease from out-of-tune to in-tune by 70% of the period, wobble slightly
-    const k = Math.min(1, phase / 0.7);
-    const cents = startCents * (1 - k) * (1 - k) + Math.sin(t * 7) * 0.8;
-    d.osc.frequency.setValueAtTime(STRINGS[idx].freq * Math.pow(2, cents / 1200), ctx.currentTime);
-    d.g.gain.setValueAtTime(phase > 0.93 ? 0 : 0.4, ctx.currentTime);
-  }
-
   function loop(mine) {
     if (!running || mine !== session) return;
-    updateDemoPitch();
     analyser.getFloatTimeDomainData(buf);
     let sum = 0;
     for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
@@ -450,7 +415,6 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
   }
 
   $("start").addEventListener("click", () => { if (running && stream) stopAll(); else startMic(); });
-  $("demo").addEventListener("click", () => { if (running && demoNodes) stopAll(); else startDemo(); });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden && running) { stopAll(); setStatus("Paused while the tuner was in the background. Tap Start tuner to listen again."); }
   });
