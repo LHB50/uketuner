@@ -195,12 +195,19 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
 
   let needleTarget = -40, needleNow = -40;
   const reduceMotion = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let needleAnimating = false;
   function animateNeedle() {
-    needleNow += (needleTarget - needleNow) * (reduceMotion ? 1 : 0.25);
+    const diff = needleTarget - needleNow;
+    needleNow = Math.abs(diff) < 0.05 || reduceMotion ? needleTarget : needleNow + diff * 0.25;
     needle.setAttribute("transform", `rotate(${ang(needleNow) * 180 / Math.PI} ${CX} ${CY})`);
-    requestAnimationFrame(animateNeedle);
+    needleAnimating = needleNow !== needleTarget;
+    if (needleAnimating) requestAnimationFrame(animateNeedle);
   }
-  requestAnimationFrame(animateNeedle);
+  function setNeedle(c) {
+    needleTarget = c;
+    if (!needleAnimating) { needleAnimating = true; requestAnimationFrame(animateNeedle); }
+  }
+  needleAnimating = true; requestAnimationFrame(animateNeedle);
 
   // ---- Pitch detection (YIN) ----
   function yin(buf, sr) {
@@ -230,12 +237,13 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
     }
     return { freq: sr / better, clarity: 1 - d[tau] };
   }
-  window.__yin = yin; // exposed for testing
 
   // ---- Audio ----
   let ctx = null, analyser = null, buf = null, source = null, stream = null, demoNodes = null, running = false;
   const history = [];
   let lastHeard = 0;
+  let session = 0;      // bumps on every start/stop so stale loops, prompts and locks can tell they're out of date
+  let loopTimer = 0;
 
   function ensureCtx() {
     if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -252,25 +260,40 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
 
   async function startMic() {
     stopAll();
+    const mine = session;
     ensureCtx();
+    $("start").disabled = true;
+    setStatus("Waiting for microphone permission…");
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setStatus("This browser can't use the microphone here. Open the tuner over https in Chrome or Safari.", true);
       return;
     }
+    let s;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+      s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
     } catch (e) {
-      setStatus("The microphone was blocked. Allow mic access for this page, or tap Demo to see how it works.", true);
+      $("start").disabled = false;
+      if (mine !== session) return;
+      const name = e && e.name;
+      setStatus(name === "NotFoundError" || name === "OverconstrainedError" ? "No microphone was found on this device." :
+                name === "NotReadableError" ? "Another app is using the microphone. Close it and tap Start tuner again." :
+                "The microphone was blocked. Allow mic access for this page, or tap Demo to see how it works.", true);
       return;
     }
+    $("start").disabled = false;
+    if (mine !== session) { s.getTracks().forEach(t => t.stop()); return; } // user tapped Demo or left meanwhile
+    stream = s;
+    stream.getAudioTracks().forEach(t => t.addEventListener("ended", () => {
+      if (stream === s) { stopAll(); setStatus("The microphone was disconnected. Tap Start tuner to listen again.", true); }
+    }));
     makeAnalyser();
     source = ctx.createMediaStreamSource(stream);
     source.connect(analyser);
     running = true;
-    keepAwake();
+    keepAwake(mine);
     $("start").textContent = "Stop";
     setStatus("Listening. Pluck one string at a time.");
-    loop();
+    loop(mine);
   }
 
   function startDemo() {
@@ -282,20 +305,26 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
     const g = ctx.createGain(); g.gain.value = 0.4;
     osc.connect(g); g.connect(analyser);
     osc.start();
-    demoNodes = { osc, g, idx: 0, t0: ctx.currentTime, offset: 0 };
+    demoNodes = { osc, g, t0: ctx.currentTime };
     running = true;
     $("demo").textContent = "Stop demo";
     setStatus("Demo: a simulated string tunes up, one note at a time.");
-    loop();
+    loop(session);
   }
 
   // Keep the screen on while listening, where the browser allows it.
   let wakeLock = null;
-  async function keepAwake() {
-    try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request("screen"); } catch (_) { wakeLock = null; }
+  async function keepAwake(mine) {
+    if (!navigator.wakeLock) return;
+    try {
+      const lock = await navigator.wakeLock.request("screen");
+      if (mine === session) wakeLock = lock; else lock.release().catch(() => {});
+    } catch (_) { /* not allowed here; the tuner still works */ }
   }
   function stopAll() {
+    session++;
     running = false;
+    clearTimeout(loopTimer);
     if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
     if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
     if (source) { source.disconnect(); source = null; }
@@ -305,6 +334,7 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
     history.length = 0;
     showIdle();
     $("level").style.width = "3%";
+    setStatus("Tap Start tuner and allow the microphone.");
   }
 
   function updateDemoPitch() {
@@ -321,8 +351,8 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
     d.g.gain.setValueAtTime(phase > 0.93 ? 0 : 0.4, ctx.currentTime);
   }
 
-  function loop() {
-    if (!running) return;
+  function loop(mine) {
+    if (!running || mine !== session) return;
     updateDemoPitch();
     analyser.getFloatTimeDomainData(buf);
     let sum = 0;
@@ -343,7 +373,7 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
       }
     }
     if (lastHeard && now - lastHeard > 1500) { lastHeard = 0; history.length = 0; showIdle(); }
-    setTimeout(() => requestAnimationFrame(loop), 30);
+    loopTimer = setTimeout(() => requestAnimationFrame(() => loop(mine)), 30);
   }
   const median = a => { const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; };
 
@@ -372,7 +402,7 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
     });
     $("note").classList.toggle("lit", inTune);
     const shown = onString ? bestCents : cents;
-    needleTarget = shown;
+    setNeedle(shown);
     const c = Math.round(shown);
     $("cents").textContent = inTune ? "In tune" :
       (onString ? `${Math.abs(c)} cents ${c < 0 ? "flat, tighten" : "sharp, loosen"} the ${STRINGS[best].name} string` :
@@ -384,7 +414,7 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
     $("freq").textContent = "0.0";
     $("cents").textContent = "";
     tiles.forEach(t => t.classList.remove("lit", "near"));
-    needleTarget = -40;
+    setNeedle(-40);
   }
 
   // ---- Reference tones ----
@@ -404,11 +434,13 @@ h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
     o.start(t); o.stop(t + 2.3);
     refNode = o;
     tiles[i].classList.add("playing");
-    o.onended = () => tiles[i].classList.remove("playing");
+    o.onended = () => { if (refNode === o) { tiles[i].classList.remove("playing"); refNode = null; } };
   }
 
   $("start").addEventListener("click", () => { if (running && stream) stopAll(); else startMic(); });
   $("demo").addEventListener("click", () => { if (running && demoNodes) stopAll(); else startDemo(); });
-  document.addEventListener("visibilitychange", () => { if (document.hidden && running) stopAll(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && running) { stopAll(); setStatus("Paused while the tuner was in the background. Tap Start tuner to listen again."); }
+  });
 })();
 </script>
