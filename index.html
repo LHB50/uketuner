@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#17120f">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Soprano Uke Tuner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Share+Tech+Mono&display=swap">
+<style>
+/* Layout: one phone-height column, stacked like the model app: header, mic level, strings, detected note, dial. Single dark look by choice. */
+:root {
+  --ground: #5e2418;      /* rosewood body */
+  --ground-deep: #461a11;
+  --header: #17120f;
+  --tile: #2a211c;
+  --tile-edge: #3a2d26;
+  --ink: #f6eee6;
+  --ink-dim: #c9a898;
+  --good: #22b14c;
+  --good-glow: rgba(34, 177, 76, .55);
+  --near: #f2b134;
+  --display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --digits: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--display);
+  -webkit-tap-highlight-color: transparent;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--header); }
+.app { min-height: 100%; display: flex; flex-direction: column; max-width: 560px; margin: 0 auto; }
+header {
+  background: var(--header);
+  padding-block: 18px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  text-align: center;
+}
+header h1 { margin: 0; font-size: 1.9rem; font-weight: 600; letter-spacing: .01em; }
+header p { margin: 2px 0 0; font-size: .95rem; color: var(--ink-dim); font-family: var(--digits); letter-spacing: .08em; }
+main {
+  flex: 1;
+  display: flex; flex-direction: column; gap: 14px;
+  padding-block: 14px 18px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+h2 { margin: 0; text-align: center; font-size: 1.35rem; font-weight: 500; }
+.level { height: 22px; background: var(--tile); border: 1px solid var(--tile-edge); border-radius: 3px; overflow: hidden; }
+.level i { display: block; height: 100%; width: 3%; background: var(--good); transition: width 60ms linear; }
+
+.strings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.string {
+  appearance: none; border: 2px solid transparent; border-radius: 3px;
+  background: var(--tile); color: var(--ink);
+  padding-block: 18px 10px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  font: inherit;
+  transition: background-color .15s, border-color .15s, box-shadow .15s;
+}
+.string b { font-family: var(--digits); font-size: 2.6rem; font-weight: 400; line-height: 1; }
+.string small { font-family: var(--digits); font-size: .72rem; color: var(--ink-dim); letter-spacing: .04em; }
+.string.near { border-color: var(--near); }
+.string.lit { background: var(--good); border-color: var(--good); box-shadow: 0 0 22px var(--good-glow); }
+.string.lit small { color: var(--ink); }
+.string.playing { border-color: var(--ink); }
+.string:focus-visible, .btn:focus-visible { outline: 3px solid var(--near); outline-offset: 2px; }
+.hint { margin: -6px 0 0; text-align: center; font-size: .85rem; color: var(--ink-dim); }
+
+.detected { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; align-items: end; }
+.detected .side { display: flex; flex-direction: column; gap: 4px; }
+.detected .sign { text-align: center; font-size: 1.6rem; font-weight: 700; line-height: 1; }
+.cell { background: var(--tile); border-radius: 3px; display: grid; place-items: center; font-family: var(--digits); }
+.side .cell { height: 62px; font-size: 1.7rem; color: var(--ink-dim); }
+.mid .cell { height: 88px; font-size: 3rem; }
+.mid .cell.lit { color: var(--good); }
+.freq { text-align: center; font-size: 1.45rem; font-variant-numeric: tabular-nums; }
+.freq span { font-family: var(--digits); }
+.cents-readout { text-align: center; font-family: var(--digits); font-size: 1rem; color: var(--ink-dim); margin-top: -10px; min-height: 1.2em; }
+
+.dial { width: 100%; max-width: 100%; display: block; margin-top: auto; }
+
+.controls { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.btn {
+  appearance: none; border: 0; border-radius: 999px; cursor: pointer;
+  font: 600 1.05rem var(--display); letter-spacing: .03em;
+  padding: 12px 22px; background: var(--ink); color: var(--header);
+}
+.btn.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink-dim); }
+.status { text-align: center; font-size: .92rem; color: var(--ink-dim); margin: 0; min-height: 1.2em; }
+.status.warn { color: var(--near); }
+@media (prefers-reduced-motion: reduce) { .level i, .string { transition: none; } }
+</style>
+
+<div class="app">
+  <header>
+    <h1>Soprano Standard</h1>
+    <p>G4 · C4 · E4 · A4</p>
+  </header>
+  <main>
+    <h2>Mic Level</h2>
+    <div class="level" aria-hidden="true"><i id="level"></i></div>
+
+    <h2>Tuning Style Notes</h2>
+    <div class="strings" id="strings"></div>
+    <p class="hint">Tap a note to hear its reference tone.</p>
+
+    <h2>Detected Note</h2>
+    <div class="detected" aria-live="polite">
+      <div class="side"><div class="sign">−</div><div class="cell" id="flat">–</div></div>
+      <div class="mid"><div class="cell" id="note">–</div></div>
+      <div class="side"><div class="sign">+</div><div class="cell" id="sharp">–</div></div>
+    </div>
+    <div class="freq">Frequency: <span id="freq">0.0</span> Hz</div>
+    <div class="cents-readout" id="cents"></div>
+
+    <svg class="dial" id="dial" viewBox="0 0 400 228" role="img" aria-label="Tuning dial from minus 40 to plus 40 cents"></svg>
+
+    <div class="controls">
+      <button class="btn" id="start" type="button">Start tuner</button>
+      <button class="btn ghost" id="demo" type="button">Demo</button>
+    </div>
+    <p class="status" id="status">Tap Start tuner and allow the microphone.</p>
+  </main>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  // ---- Tuning ----
+  const STRINGS = [
+    { name: "G", label: "G4", freq: 392.00 },
+    { name: "C", label: "C4", freq: 261.63 },
+    { name: "E", label: "E4", freq: 329.63 },
+    { name: "A", label: "A4", freq: 440.00 },
+  ];
+  const IN_TUNE_CENTS = 5;
+  const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+  const midiOf = f => 69 + 12 * Math.log2(f / 440);
+  const freqOfMidi = m => 440 * Math.pow(2, (m - 69) / 12);
+  const nameOf = m => NOTE_NAMES[((m % 12) + 12) % 12];
+
+  // ---- DOM ----
+  const $ = id => document.getElementById(id);
+  const stringsEl = $("strings");
+  const tiles = STRINGS.map((s, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "string"; b.id = "string-" + s.name;
+    b.innerHTML = `<b>${s.name}</b><small>${s.freq.toFixed(2)}</small>`;
+    b.setAttribute("aria-label", `${s.label}, ${s.freq} hertz. Tap to play reference tone`);
+    b.addEventListener("click", () => playReference(i));
+    stringsEl.appendChild(b);
+    return b;
+  });
+
+  // ---- Dial ----
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const dial = $("dial");
+  const CX = 200, CY = 205, R_OUT = 186, R_BAND = 150, R_IN = 64;
+  const ang = c => (Math.max(-40, Math.min(40, c)) / 40) * (Math.PI / 2); // 0 = straight up
+  const pt = (r, a) => [CX + r * Math.sin(a), CY - r * Math.cos(a)];
+  const el = (tag, attrs) => { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); dial.appendChild(e); return e; };
+  function sector(r1, r2, c1, c2, fill) {
+    const a1 = ang(c1), a2 = ang(c2);
+    const [x1, y1] = pt(r2, a1), [x2, y2] = pt(r2, a2), [x3, y3] = pt(r1, a2), [x4, y4] = pt(r1, a1);
+    return el("path", { d: `M${x1} ${y1} A${r2} ${r2} 0 0 1 ${x2} ${y2} L${x3} ${y3} A${r1} ${r1} 0 0 0 ${x4} ${y4} Z`, fill, stroke: "#3a2017", "stroke-width": 1.5 });
+  }
+  sector(R_BAND, R_OUT, -40, 40, "#2a211c");
+  [[-40,-30,"#ef5a1f"],[-30,-20,"#f39a22"],[-20,-10,"#f6e21e"],[-10,-5,"#a8dc1f"],[-5,5,"#1fae36"],
+   [5,10,"#a8dc1f"],[10,20,"#f6e21e"],[20,30,"#f39a22"],[30,40,"#ef5a1f"]]
+    .forEach(([a, b, c]) => sector(R_IN + 22, R_BAND, a, b, c));
+  for (let c = -40; c <= 40; c += 10) {
+    const [x1, y1] = pt(R_IN + 22, ang(c)), [x2, y2] = pt(R_OUT, ang(c));
+    el("line", { x1, y1, x2, y2, stroke: "#3a2017", "stroke-width": 1.5 });
+  }
+  for (let c = -40; c <= 40; c += 10) {
+    const a = ang(Math.max(-36, Math.min(36, c)));
+    const [tx, ty] = pt((R_BAND + R_OUT) / 2, a);
+    const t = el("text", { x: tx, y: ty, fill: "#f6eee6", "font-size": 15, "font-family": "Share Tech Mono, monospace",
+      "text-anchor": "middle", "dominant-baseline": "central", transform: `rotate(${a * 180 / Math.PI} ${tx} ${ty})` });
+    t.textContent = c === 0 ? "0" : (c > 0 ? "+" + c : String(c));
+  }
+  el("rect", { x: 6, y: CY, width: 388, height: 14, fill: "#2a211c", rx: 2 });
+  el("path", { d: `M${CX - R_IN - 22} ${CY} A${R_IN + 22} ${R_IN + 22} 0 0 1 ${CX + R_IN + 22} ${CY} Z`, fill: "#5e2418" });
+  const needle = el("g", {});
+  const needleShape = document.createElementNS(SVGNS, "path");
+  needleShape.setAttribute("d", `M${CX - 9} ${CY} L${CX} ${CY - R_BAND + 6} L${CX + 9} ${CY} Z`);
+  needleShape.setAttribute("fill", "#141010");
+  needle.appendChild(needleShape);
+  const hub = document.createElementNS(SVGNS, "circle");
+  hub.setAttribute("cx", CX); hub.setAttribute("cy", CY); hub.setAttribute("r", 15); hub.setAttribute("fill", "#141010");
+  needle.appendChild(hub);
+  const hubCap = document.createElementNS(SVGNS, "circle");
+  hubCap.setAttribute("cx", CX); hubCap.setAttribute("cy", CY); hubCap.setAttribute("r", 8); hubCap.setAttribute("fill", "#4a4442");
+  dial.appendChild(hubCap);
+
+  let needleTarget = -40, needleNow = -40;
+  const reduceMotion = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function animateNeedle() {
+    needleNow += (needleTarget - needleNow) * (reduceMotion ? 1 : 0.25);
+    needle.setAttribute("transform", `rotate(${ang(needleNow) * 180 / Math.PI} ${CX} ${CY})`);
+    requestAnimationFrame(animateNeedle);
+  }
+  requestAnimationFrame(animateNeedle);
+
+  // ---- Pitch detection (YIN) ----
+  function yin(buf, sr) {
+    const minF = 70, maxF = 1200, threshold = 0.15;
+    const tauMin = Math.floor(sr / maxF), tauMax = Math.min(Math.floor(sr / minF), Math.floor(buf.length / 2) - 1);
+    const W = buf.length - tauMax;
+    const d = new Float32Array(tauMax + 1);
+    for (let tau = 1; tau <= tauMax; tau++) {
+      let s = 0;
+      for (let i = 0; i < W; i++) { const v = buf[i] - buf[i + tau]; s += v * v; }
+      d[tau] = s;
+    }
+    // cumulative mean normalized difference
+    let run = 0; d[0] = 1;
+    for (let tau = 1; tau <= tauMax; tau++) { run += d[tau]; d[tau] = run ? d[tau] * tau / run : 1; }
+    let tau = -1;
+    for (let t = tauMin; t <= tauMax; t++) {
+      if (d[t] < threshold) { while (t + 1 <= tauMax && d[t + 1] < d[t]) t++; tau = t; break; }
+    }
+    if (tau < 0) return null;
+    // parabolic interpolation
+    let better = tau;
+    if (tau > 1 && tau < tauMax) {
+      const a = d[tau - 1], b = d[tau], c = d[tau + 1];
+      const den = a + c - 2 * b;
+      if (den) better = tau + (a - c) / (2 * den);
+    }
+    return { freq: sr / better, clarity: 1 - d[tau] };
+  }
+  window.__yin = yin; // exposed for testing
+
+  // ---- Audio ----
+  let ctx = null, analyser = null, buf = null, source = null, stream = null, demoNodes = null, running = false;
+  const history = [];
+  let lastHeard = 0;
+
+  function ensureCtx() {
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === "suspended") ctx.resume();
+    return ctx;
+  }
+  function makeAnalyser() {
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 4096;
+    buf = new Float32Array(analyser.fftSize);
+  }
+  const statusEl = $("status");
+  const setStatus = (t, warn) => { statusEl.textContent = t; statusEl.classList.toggle("warn", !!warn); };
+
+  async function startMic() {
+    stopAll();
+    ensureCtx();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setStatus("This browser can't use the microphone here. Open the tuner over https in Chrome or Safari.", true);
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    } catch (e) {
+      setStatus("The microphone was blocked. Allow mic access for this page, or tap Demo to see how it works.", true);
+      return;
+    }
+    makeAnalyser();
+    source = ctx.createMediaStreamSource(stream);
+    source.connect(analyser);
+    running = true;
+    $("start").textContent = "Stop";
+    setStatus("Listening. Pluck one string at a time.");
+    loop();
+  }
+
+  function startDemo() {
+    stopAll();
+    ensureCtx();
+    makeAnalyser();
+    // A plucked-ish tone that starts out of tune and glides into tune, cycling through the strings.
+    const osc = ctx.createOscillator(); osc.type = "triangle";
+    const g = ctx.createGain(); g.gain.value = 0.4;
+    osc.connect(g); g.connect(analyser);
+    osc.start();
+    demoNodes = { osc, g, idx: 0, t0: ctx.currentTime, offset: 0 };
+    running = true;
+    $("demo").textContent = "Stop demo";
+    setStatus("Demo: a simulated string tunes up, one note at a time.");
+    loop();
+  }
+
+  function stopAll() {
+    running = false;
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    if (source) { source.disconnect(); source = null; }
+    if (demoNodes) { try { demoNodes.osc.stop(); } catch (_) {} demoNodes = null; }
+    $("start").textContent = "Start tuner";
+    $("demo").textContent = "Demo";
+    history.length = 0;
+    showIdle();
+    $("level").style.width = "3%";
+  }
+
+  function updateDemoPitch() {
+    const d = demoNodes; if (!d) return;
+    const t = ctx.currentTime - d.t0;
+    const period = 4.5;
+    const idx = Math.floor(t / period) % STRINGS.length;
+    const phase = (t % period) / period;
+    const startCents = [-35, 28, -18, 22][idx];
+    // ease from out-of-tune to in-tune by 70% of the period, wobble slightly
+    const k = Math.min(1, phase / 0.7);
+    const cents = startCents * (1 - k) * (1 - k) + Math.sin(t * 7) * 0.8;
+    d.osc.frequency.setValueAtTime(STRINGS[idx].freq * Math.pow(2, cents / 1200), ctx.currentTime);
+    d.g.gain.setValueAtTime(phase > 0.93 ? 0 : 0.4, ctx.currentTime);
+  }
+
+  function loop() {
+    if (!running) return;
+    updateDemoPitch();
+    analyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+    const rms = Math.sqrt(sum / buf.length);
+    const db = 20 * Math.log10(rms + 1e-9);
+    $("level").style.width = Math.max(3, Math.min(100, (db + 60) / 60 * 100)) + "%";
+
+    const now = performance.now();
+    if (rms > 0.006) {
+      const r = yin(buf, ctx.sampleRate);
+      if (r && r.clarity > 0.85) {
+        const m = midiOf(r.freq);
+        if (history.length && Math.abs(midiOf(median(history)) - m) > 0.6) history.length = 0;
+        history.push(r.freq); if (history.length > 5) history.shift();
+        lastHeard = now;
+        show(median(history));
+      }
+    }
+    if (lastHeard && now - lastHeard > 1500) { lastHeard = 0; history.length = 0; showIdle(); }
+    setTimeout(() => requestAnimationFrame(loop), 30);
+  }
+  const median = a => { const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; };
+
+  // ---- Display ----
+  function show(freq) {
+    const m = midiOf(freq), near = Math.round(m);
+    const cents = (m - near) * 100;
+    $("flat").textContent = nameOf(near - 1);
+    $("note").textContent = nameOf(near);
+    $("sharp").textContent = nameOf(near + 1);
+    $("freq").textContent = freq.toFixed(1);
+    // closest ukulele string (allow low-G G3 too)
+    let best = -1, bestCents = Infinity;
+    STRINGS.forEach((s, i) => {
+      [s.freq, s.name === "G" ? s.freq / 2 : null].forEach(f => {
+        if (!f) return;
+        const c = 1200 * Math.log2(freq / f);
+        if (Math.abs(c) < Math.abs(bestCents)) { bestCents = c; best = i; }
+      });
+    });
+    const onString = Math.abs(bestCents) < 150;
+    const inTune = onString && Math.abs(bestCents) <= IN_TUNE_CENTS;
+    tiles.forEach((t, i) => {
+      t.classList.toggle("lit", inTune && i === best);
+      t.classList.toggle("near", onString && !inTune && i === best);
+    });
+    $("note").classList.toggle("lit", inTune);
+    const shown = onString ? bestCents : cents;
+    needleTarget = shown;
+    const c = Math.round(shown);
+    $("cents").textContent = inTune ? "In tune" :
+      (onString ? `${Math.abs(c)} cents ${c < 0 ? "flat, tighten" : "sharp, loosen"} the ${STRINGS[best].name} string` :
+                  `${c > 0 ? "+" : ""}${c} cents`);
+  }
+  function showIdle() {
+    ["flat", "note", "sharp"].forEach(id => $(id).textContent = "–");
+    $("note").classList.remove("lit");
+    $("freq").textContent = "0.0";
+    $("cents").textContent = "";
+    tiles.forEach(t => t.classList.remove("lit", "near"));
+    needleTarget = -40;
+  }
+
+  // ---- Reference tones ----
+  let refNode = null;
+  function playReference(i) {
+    ensureCtx();
+    if (refNode) { try { refNode.stop(); } catch (_) {} }
+    tiles.forEach(t => t.classList.remove("playing"));
+    const s = STRINGS[i];
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "triangle"; o.frequency.value = s.freq;
+    const t = ctx.currentTime;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.35, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 2.2);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t); o.stop(t + 2.3);
+    refNode = o;
+    tiles[i].classList.add("playing");
+    o.onended = () => tiles[i].classList.remove("playing");
+  }
+
+  $("start").addEventListener("click", () => { if (running && stream) stopAll(); else startMic(); });
+  $("demo").addEventListener("click", () => { if (running && demoNodes) stopAll(); else startDemo(); });
+  document.addEventListener("visibilitychange", () => { if (document.hidden && running) stopAll(); });
+})();
+</script>
+
+</body>
+</html>
