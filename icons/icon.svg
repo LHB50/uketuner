@@ -33,7 +33,7 @@
   <circle cx="285" cy="267" r="11" fill="#17120f"/>
   <circle cx="281" cy="263" r="3.5" fill="#ffffff"/>
   <!-- angry brow -->
-  <path d="M262 226 L322 240 L320 252 L260 236 Z" fill="#17120f"/>
+  <path d="M262 256 L324 232 L319 218 L258 242 Z" fill="#17120f"/>
   <!-- soundhole as a snarl -->
   <ellipse cx="256" cy="336" rx="34" ry="24" fill="#2a160c"/>
   <path d="M226 326 L236 338 L246 326 L256 338 L266 326 L276 338 L286 326 Z" fill="#f6eee6"/>
