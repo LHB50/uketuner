@@ -12,5 +12,5 @@ printf '%s\n' '<!doctype html>' '<html lang="en">' '<head>' '<meta charset="utf-
  '<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}[hidden]{display:none!important}</style>' \
  '</head>' '<body>'
 cat "$BODY"
-printf '%s\n' '' '<script>if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));</script>' '</body>' '</html>'
+printf '%s\n' '' '<script>if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(() => {}));</script>' '</body>' '</html>'
 } > index.html
